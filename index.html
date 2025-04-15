@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atlas Interactivo de Brasil</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Base styles */
+        body {
+            background-color: #f0eadd; /* Beige background */
+            font-family: 'Inter', sans-serif; /* Apply Inter font */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            perspective: 1500px; /* For 3D page flip effect */
+            overflow-x: hidden; /* Prevent horizontal scroll */
+            padding: 10px 0; /* Add vertical padding */
+        }
+        .book-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%; /* Occupy available width */
+        }
+        .book {
+            /* Initial relative size for large screens */
+            width: 90vw;
+            max-width: 800px; /* Maintain a maximum on very large screens */
+            height: 70vh; /* Use viewport height */
+            max-height: 550px; /* Limit maximum height */
+            position: relative;
+            display: flex;
+            margin-bottom: 70px; /* More space for buttons */
+            transform-style: preserve-3d; /* Enable 3D transformations for children */
+        }
+        .page {
+            background-color: #ffffff; /* White page background */
+            border: 1px solid #ccc; /* Light gray border */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* Subtle shadow */
+            position: absolute;
+            width: 50%;
+            height: 100%;
+            top: 0;
+            /* Transition for the flip effect and shadow */
+            transition: transform 0.6s ease-in-out, box-shadow 0.6s ease-in-out;
+            overflow: hidden; /* Hide content that overflows */
+            display: flex;
+            flex-direction: column;
+            backface-visibility: hidden; /* Hide the back of the page during flip */
+            padding: 15px; /* Base padding */
+            border-radius: 10px; /* Rounded corners for the book */
+        }
+        .page.left {
+            left: 0;
+            border-radius: 10px 0 0 10px; /* Rounded corners on the outer left edge */
+            transform-origin: right center; /* Pivot point for flip */
+            z-index: 1; /* Base z-index */
+        }
+        .page.right {
+            right: 0;
+            border-radius: 0 10px 10px 0; /* Rounded corners on the outer right edge */
+            transform-origin: left center; /* Pivot point for flip */
+            z-index: 2; /* Right pages initially on top */
+        }
+        /* State when a right page is flipped */
+        .page.right.flipped {
+             transform: rotateY(-180deg); /* Flip effect */
+             box-shadow: -5px 4px 8px rgba(0,0,0,0.2); /* Shadow appears on the left */
+        }
+        /* State when a left page is flipped (becomes the back of the right page) */
+        .page.left.flipped {
+             transform: rotateY(180deg); /* Flip effect */
+             box-shadow: 5px 4px 8px rgba(0,0,0,0.2); /* Shadow appears on the right */
+        }
+        .page-content {
+             width: 100%;
+             height: 100%;
+             overflow-y: auto; /* Enable vertical scroll if content overflows */
+             padding-right: 5px; /* Less padding for scrollbar */
+             /* Custom scrollbar styling */
+             scrollbar-width: thin;
+             scrollbar-color: #ccc #f0f0f0;
+        }
+        /* Webkit scrollbar styling */
+        .page-content::-webkit-scrollbar { width: 5px; }
+        .page-content::-webkit-scrollbar-track { background: #f0f0f0; border-radius: 10px; }
+        .page-content::-webkit-scrollbar-thumb { background-color: #ccc; border-radius: 10px; border: 1px solid #f0f0f0; }
+
+        /* Base content styles */
+        .index-list { list-style: none; padding: 0; margin-top: 15px; }
+        .index-item button {
+            display: block; width: 100%; padding: 10px 12px; margin-bottom: 8px;
+            background-color: #e2e8f0; border: 1px solid #cbd5e1; border-radius: 6px;
+            text-align: left; font-weight: 600; color: #1e40af; cursor: pointer;
+            transition: background-color 0.3s, box-shadow 0.3s; font-size: 0.8rem;
+        }
+        .index-item button:hover { background-color: #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+
+        .page-content h2 {
+            text-align: center; margin-bottom: 10px; font-weight: bold;
+            font-size: 1.25rem; color: #006400; /* Dark green */
+        }
+        .page-content h3 { /* Style for subsections */
+             font-size: 0.9rem;
+             font-weight: bold;
+             color: #1f2937; /* Dark gray */
+             margin-top: 0.8em;
+             margin-bottom: 0.3em;
+        }
+        .page-content img {
+            max-width: 100%; height: auto; max-height: 150px; /* Limit image height */
+            object-fit: contain; /* Scale image while preserving aspect ratio */
+            border-radius: 6px; margin: 0 auto 10px auto; /* Center image */
+            display: block; background-color: #eee; /* Placeholder background */
+            /* Fallback image using placehold.co */
+            onerror: this.onerror=null; this.src='https://placehold.co/300x150/cccccc/ffffff?text=Imagen+no+disponible';
+        }
+        .page-content p, .page-content ul {
+            font-size: 0.75rem; line-height: 1.5; color: #374151; /* Medium gray text */
+            text-align: justify; margin-bottom: 0.5em; /* Space between paragraphs */
+        }
+         .page-content ul { list-style: disc; margin-left: 15px; padding-left: 5px;} /* Adjust lists */
+         .page-content ul li { margin-bottom: 0.2em; } /* Less space between list items */
+        .page-content strong { color: #1f2937; } /* Darker color for strong text */
+        /* Style for the added link */
+        .page-content a {
+             color: #1d4ed8; /* Blue link color */
+             text-decoration: underline;
+             font-weight: 600;
+        }
+        .page-content a:hover {
+             color: #1e40af; /* Darker blue on hover */
+        }
+
+
+        /* Navigation button */
+        .navigation { display: flex; justify-content: center; gap: 15px; margin-top: 15px; }
+        .nav-button {
+            padding: 8px 15px; background-color: #006400; /* Dark green button */ color: white; border: none;
+            border-radius: 5px; cursor: pointer; transition: background-color 0.3s;
+            font-weight: bold; font-size: 0.8rem;
+        }
+        .nav-button:hover:not(:disabled) { background-color: #228B22; /* Lighter green on hover */ }
+        .nav-button:disabled { background-color: #cccccc; cursor: not-allowed; }
+
+        /* Media Query for mobile devices */
+        @media (max-width: 768px) {
+            body { align-items: flex-start; padding-top: 20px; } /* Align book to top on mobile */
+            .book { width: 95vw; height: 65vh; max-height: none; margin-bottom: 60px; } /* Adjust book size */
+            .page { padding: 10px; } /* Reduce page padding */
+            .index-list { margin-top: 10px; }
+            .index-item button { padding: 8px 10px; margin-bottom: 6px; font-size: 0.7rem; }
+            .page-content h2 { font-size: 1rem; margin-bottom: 8px;}
+            .page-content h3 { font-size: 0.8rem; }
+            .page-content img { max-height: 100px; margin-bottom: 8px; } /* Smaller images */
+            .page-content p, .page-content ul { font-size: 0.65rem; line-height: 1.4; } /* Smaller text */
+            .page-content ul { margin-left: 12px; }
+            .navigation { margin-top: 10px; }
+            .nav-button { padding: 6px 12px; font-size: 0.7rem; } /* Smaller buttons */
+        }
+         /* Media Query for very small screens */
+         @media (max-width: 480px) {
+             .page-content h2 { font-size: 0.9rem; }
+             .page-content h3 { font-size: 0.75rem; }
+             .page-content img { max-height: 80px; }
+             .page-content p, .page-content ul { font-size: 0.6rem; }
+             .index-item button { padding: 6px 8px; font-size: 0.65rem; }
+         }
+
+    </style>
+</head>
+<body>
+
+<div class="book-container">
+    <div class="book" id="book">
+
+        <div class="page left" id="page1">
+            <div class="page-content">
+                <h2 class="text-xl font-bold mb-4 text-center">Índice de Brasil</h2>
+                <ul class="index-list">
+                    <li class="index-item">
+                        <button data-target-view="0">Geografía y General</button> </li>
+                    <li class="index-item">
+                        <button data-target-view="1">Ciudades y Cultura</button> </li>
+                    <li class="index-item">
+                        <button data-target-view="2">Región Norte y Nordeste</button> </li>
+                    <li class="index-item">
+                        <button data-target-view="3">Región Sudeste y Sur</button> </li>
+                    <li class="index-item">
+                        <button data-target-view="4">Centro-Oeste y Pantanal</button> </li>
+                     <li class="index-item">
+                        <button data-target-view="5">Economía e Historia</button> </li>
+                     <li class="index-item">
+                        <button data-target-view="6">Turismo y Curiosidades</button> </li>
+                </ul>
+                <p class="text-xs text-gray-500 mt-auto pt-4">Haz clic en un tema para ir directamente.</p>
+            </div>
+        </div>
+
+        <div class="page right" id="page2">
+            <div class="page-content">
+                <h2>Geografía y Generalidades</h2>
+                <img src="https://www.freeworldmaps.net/es/brasil/brasil-mapa-fisico.jpg"
+                     alt="Mapa Físico de Brasil"
+                     onerror="this.onerror=null; this.src='https://placehold.co/350x180/cccccc/ffffff?text=Mapa+no+disponible';">
+                <p>Brasil es un país ubicado en América del Sur, con una superficie de 8.514.215 km². Es el país más grande de América Latina y el quinto más grande del mundo.</p>
+                <p><strong>Relieve:</strong> El relieve de Brasil se caracteriza por ser llano, con una altitud moderada.</p>
+                <p>El punto más alto del país es el Pico da Neblina, con 2.994 m de altura.</p>
+                <p>El Planalto Brasileño es un vasto planalto que se extiende por todo el centro del país.</p>
+                <p>El macizo brasileño ocupa casi los tercios restantes del país.</p>
+                <p>El Escudo guayanés limita al norte del país.</p>
+                <p><strong>Capital:</strong> Brasilia.<br>
+                   <strong>Idioma:</strong> Portugués.<br>
+                   <strong>Moneda:</strong> Real (BRL).</p>
+            </div>
+        </div>
+
+        <div class="page left" id="page3">
+             <div class="page-content">
+                 <h2>Las Ciudades Potencia</h2>
+                  <img src="https://www.mapas-del-mundo.net/mapas/america-del-sur/brasil/mapa-de-brasil-con-ciudades-small.jpg"
+                      alt="Mapa de Brasil con ciudades principales"
+                      onerror="this.onerror=null; this.src='https://placehold.co/350x180/cccccc/ffffff?text=Mapa+no+disponible';">
+                 <p>São Paulo y Río de Janeiro son dos de las ciudades más importantes de Brasil, con economías destacadas.</p>
+                 <p><strong>São Paulo</strong></p>
+                 <p>En 2021, el producto interno bruto (PIB) de São Paulo fue de casi 2.720 millones de reales, lo que representó el 30% del PIB nacional.</p>
+                 <p>Campinas y São José dos Campos son ciudades del estado de São Paulo que lideran el avance tecnológico e industrial en Brasil.</p>
+                 <p><strong>Río de Janeiro</strong></p>
+                 <p>En 2021, Río de Janeiro se posicionó en segundo lugar en cuanto al PIB, con un valor superior a los 949.000 millones de reales.</p>
+             </div>
+        </div>
+
+        <div class="page right" id="page4">
+             <div class="page-content">
+                 <h2>Cultura Brasileña</h2>
+                 <img src="https://www.lifeder.com/wp-content/uploads/2020/01/Desfile-en-el-sab%C3%B3dromo-de-R%C3%ADo-de-janeiro3.jpg"
+                      alt="Desfile de Carnaval en Brasil"
+                      onerror="this.onerror=null; this.src='https://placehold.co/300x150/cccccc/ffffff?text=Imagen+no+disponible';">
+                 <p>La cultura brasileña es una mezcla de influencias indígenas, africanas, europeas y asiáticas. Se caracteriza por su diversidad, alegría, creatividad, y pasión.</p>
+                 <h3>Música</h3>
+                 <p>La música es un elemento fundamental de la cultura brasileña, con géneros como la Samba, Bossa Nova, MPB (Música Popular Brasileña), Forró, y Funk Carioca.</p>
+                 <h3>Gastronomía</h3>
+                 <p>La gastronomía brasileña es rica y variada, destacando platos como la Feijoada, Moqueca, Acarajé, Pão de Queijo y Brigadeiro.</p>
+                 <h3>Literatura</h3>
+                 <p>Brasil ha tenido muchas figuras literarias de renombre mundial como Machado de Assis, Clarice Lispector, Jorge Amado y Paulo Coelho.</p>
+                 <h3>Costumbres</h3>
+                 <ul>
+                     <li>Los brasileños se duchan todos los días, a veces más de una vez debido al clima.</li>
+                     <li>Es muy común llamar a las personas por su nombre pila, incluso en entornos profesionales.</li>
+                     <li>Los brasileños prefieren un estilo de comunicación indirecto y valoran la armonía social.</li>
+                     <li>El fútbol es una pasión nacional.</li>
+                 </ul>
+             </div>
+        </div>
+
+         <div class="page left" id="page5">
+             <div class="page-content">
+                 <h2>Región Norte de Brasil</h2>
+                 <img src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEie_sbl3V_J9N_82Cza61LBxeGauCjGWgaLvT8memOgbg7o_lb5Ws46VjPfCFqVswjBLDRCipkThBtEZc1S4OyHEG0ad14ky3ZJXt9sZX0d63u9hIrnmktei-Gp0enkXTQsjV9aZ39iMQYf/s1600/norte.jpg"
+                      alt="Mapa de la Región Norte de Brasil"
+                      onerror="this.onerror=null; this.src='https://placehold.co/350x180/cccccc/ffffff?text=Mapa+no+disponible';">
+                 <p>Es la región más grande de Brasil, abarcando el 45,27% del territorio nacional. Tiene la menor densidad de población de todas las regiones de Brasil.</p>
+                 <p>Comprende los estados de:</p>
+                 <ul>
+                     <li>Acre</li><li>Amapá</li><li>Amazonas</li><li>Pará</li>
+                     <li>Rondônia</li><li>Roraima</li><li>Tocantins</li>
+                 </ul>
+                 <p>Contiene bosques, ríos, cerrados y la selva amazónica. Alberga importantes universidades como la Universidad Federal de Amazonas y la Universidad Federal de Pará.</p>
+                 <p>La Amazonía es una reserva genética de importancia mundial para el desarrollo de la humanidad.</p>
+             </div>
+        </div>
+
+        <div class="page right" id="page6">
+             <div class="page-content">
+                 <h2>Región Nordeste</h2>
+                 <img src="https://i.pinimg.com/736x/e2/3c/ca/e23cca8c65e4b3863af2d538cdd9bb0a.jpg"
+                      alt="Mapa de la Región Nordeste de Brasil"
+                      onerror="this.onerror=null; this.src='https://placehold.co/350x180/cccccc/ffffff?text=Mapa+no+disponible';">
+                 <p>La región Nordeste de Brasil tiene muchas playas, entre las que destacan Porto de Galinhas, Playa de Carneiros, Pedra Furada, Praia do Espelho, Baía do Sancho, Maceió y Maragogi.</p>
+                 <h3>Playas de Pernambuco</h3>
+                 <ul>
+                     <li>Porto de Galinhas</li><li>Playa de Carneiros</li><li>Playa de Boa Viagem</li>
+                     <li>Candeias Beach</li><li>Isla Coroa do Avião</li><li>Praia do Leão</li>
+                     <li>Praia do Serrambi</li><li>Playa de Sancho</li>
+                 </ul>
+                 <h3>Playas de Bahía</h3>
+                 <p>Praia do Espelho.</p>
+                 <h3>Playas de Fernando de Noronha</h3>
+                 <p>Baía do Sancho.</p>
+                 <h3>Playas de Ceará</h3>
+                 <p>Pedra Furada en Jericoacoara.</p>
+                 <h3>Playas de Maceió</h3>
+                 <p>Playa de Gunga.</p>
+                 <h3>Playas de Maragogi</h3>
+                 <p>Aguas cristalinas, arenas blancas y densos palmares.</p>
+                 <h3>Destinos turísticos del Nordeste</h3>
+                 <p>Recife, João Pessoa, Natal y Fortaleza.</p>
+                 <h3>Clima del Nordeste</h3>
+                 <ul>
+                     <li>Hace calor todo el año.</li>
+                     <li>El verano es bastante soleado y muy caluroso.</li>
+                     <li>El periodo de lluvia es entre abril y julio.</li>
+                     <li>Entre octubre y diciembre es la mejor época para viajar.</li>
+                 </ul>
+                 <h3>Estados del Nordeste</h3>
+                 <p>Alagoas, Bahía, Ceará, Maranhão, Paraíba, Piauí, Pernambuco, Río Grande del Norte y Sergipe.</p>
+             </div>
+        </div>
+
+        <div class="page left" id="page7">
+             <div class="page-content">
+                 <h2>Región Sudeste</h2>
+                 <img src="https://brazilianculture.art/wp-content/uploads/2024/05/rio-de-janeiro-brazil-copacabana-beach-september-03-2022-scaled.jpg"
+                      alt="Playa de Copacabana en Río de Janeiro"
+                      onerror="this.onerror=null; this.src='https://placehold.co/300x150/cccccc/ffffff?text=Imagen+no+disponible';">
+                 <p>La región Sudeste de Brasil es la más poblada y rica del país, y cuenta con muchos destinos turísticos.</p>
+                 <h3>Destinos turísticos</h3>
+                 <p><strong>Río de Janeiro:</strong> Ciudad que alberga la estatua del Cristo Redentor, uno de los puntos turísticos más famosos de Brasil. También cuenta con la playa de Ipanema, la playa de Copacabana, y el Parque Nacional de Tijuca.</p>
+                 <p><strong>Búzios:</strong> Ciudad balnearia de la Costa do Sol, con 23 playas y una animada vida nocturna.</p>
+                 <p><strong>Ouro Preto:</strong> Ciudad declarada Patrimonio Cultural de la Humanidad, con una rica cultura y arquitectura preservada.</p>
+                 <p><strong>São Paulo:</strong> Ciudad que alberga la Avenida Paulista, el Parque de Ibirapuera, y el Centro de convenciones São Paulo Expo.</p>
+                 <h3>Actividades turísticas</h3>
+                 <ul>
+                     <li>Visitar la estatua del Cristo Redentor</li>
+                     <li>Visitar la playa de Copacabana</li>
+                     <li>Visitar la playa de Ipanema</li>
+                     <li>Hacer parapente</li>
+                     <li>Visitar el Parque Nacional de Tijuca</li>
+                     <li>Visitar el Sambadrome</li>
+                     <li>Visitar la Basílica del Santuario Nacional de Nuestra Señora de Aparecida</li>
+                     <li>Visitar el Circuito de Interlagos</li>
+                 </ul>
+                 <h3>Otros lugares de interés</h3>
+                 <p>Montaña Pan de Azúcar (Pao de Açúcar), Selarón Steps (Escadaria Selarón), Catedral Metropolitana de Sao Sebastiao (Rio de Janeiro Cathedral), Catedral da Sé, Barrio Santa Teresa.</p>
+             </div>
+        </div>
+
+        <div class="page right" id="page8">
+             <div class="page-content">
+                 <h2>Región Sur</h2>
+                 <img src="https://embajadadebrasil.org/media/estados/regio-sur-brasil.gif"
+                      alt="Mapa de la Región Sur de Brasil"
+                      onerror="this.onerror=null; this.src='https://placehold.co/350x180/cccccc/ffffff?text=Mapa+no+disponible';">
+                 <p>Caracterizada por paisajes distintos y fuerte influencia europea (alemana, italiana, polaca).</p>
+                 <p><strong>Atracciones Principales:</strong> La atracción más conocida del sur de Brasil son las <strong>Cataratas del Iguazú</strong> (Paraná), una maravilla natural compartida con Argentina. Sin embargo, las ciudades de la región, como <strong>Curitiba</strong> (conocida por su planificación urbana y parques) y <strong>Florianópolis</strong> (famosa por sus playas), también atraen a numerosos visitantes.</p>
+                 <ul>
+                      <li><strong>Estados principales:</strong> Paraná, Santa Catarina, Rio Grande do Sul.</li>
+                      <li><strong>Otras Atracciones:</strong> Cañones de Aparados da Serra (Rio Grande do Sul/Santa Catarina), Oktoberfest en Blumenau (Santa Catarina), la región vinícola de Serra Gaúcha (Rio Grande do Sul).</li>
+                      <li><strong>Clima:</strong> El sur de Brasil tiene un <strong>clima subtropical o templado</strong>. Las temperaturas medias anuales oscilan entre 12 °C (53,6 °F) y 22 °C (71,6 °F). <strong>Nieva</strong> ocasionalmente en las zonas más altas de las sierras.</li>
+                 </ul>
+                 <p class="mt-4">
+                     <a href="https://www.youtube.com/watch?v=lxjufot8i34" target="_blank">Video sobre la Región Sur</a>
+                 </p>
+             </div>
+        </div>
+
+        <div class="page left" id="page9">
+             <div class="page-content">
+                 <h2>Centro-Oeste y Pantanal</h2>
+                 <img src="https://placehold.co/350x180/8FBC8F/2F4F4F?text=Pantanal+Brasil" alt="Pantanal Brasileño">
+                 <p>Esta región alberga la capital del país, vastas áreas agrícolas (Cerrado) y el Pantanal, el humedal tropical más grande del mundo.</p>
+                 <ul>
+                     <li><strong>Estados principales:</strong> Goiás, Mato Grosso, Mato Grosso do Sul, y el Distrito Federal.</li>
+                     <li><strong>Brasilia:</strong> La capital federal, famosa por su arquitectura moderna diseñada por Oscar Niemeyer.</li>
+                     <li><strong>Pantanal:</strong> Un paraíso para la observación de vida silvestre, hogar de jaguares, capibaras, caimanes y cientos de especies de aves.</li>
+                     <li><strong>Chapada dos Veadeiros (Goiás):</strong> Parque nacional conocido por sus cañones, cascadas y formaciones rocosas de cuarzo.</li>
+                 </ul>
+             </div>
+        </div>
+
+        <div class="page right" id="page10">
+             <div class="page-content">
+                 <h2>Economía y Recursos</h2>
+                 <img src="https://placehold.co/350x180/DAA520/000000?text=Economia+Brasil" alt="Economía de Brasil">
+                 <p>Brasil posee una de las economías más grandes del mundo, diversificada y rica en recursos naturales.</p>
+                 <ul>
+                      <li><strong>Agricultura:</strong> Líder mundial en producción y exportación de café, soja, azúcar, jugo de naranja y carne bovina.</li>
+                      <li><strong>Minería:</strong> Grandes reservas de mineral de hierro (principalmente en Minas Gerais y Pará), bauxita, manganeso, oro y piedras preciosas.</li>
+                      <li><strong>Industria:</strong> Sectores fuertes incluyen automotriz, aeroespacial (Embraer), petroquímico (Petrobras), acero, textiles y alimentos procesados.</li>
+                      <li><strong>Energía:</strong> Gran dependencia de la energía hidroeléctrica (Itaipu es una de las más grandes del mundo), además de petróleo y gas offshore.</li>
+                      <li><strong>Servicios:</strong> El sector de servicios es el mayor componente del PIB, incluyendo finanzas, telecomunicaciones y turismo.</li>
+                 </ul>
+             </div>
+        </div>
+
+        <div class="page left" id="page11">
+             <div class="page-content">
+                 <h2>Historia y Gobierno</h2>
+                 <img src="https://placehold.co/350x180/d1d5db/1f2937?text=Congreso+Brasil" alt="Congreso Nacional de Brasil">
+                 <p>La historia de Brasil abarca desde las culturas indígenas precolombinas hasta la actualidad.</p>
+                 <ul>
+                     <li><strong>Eventos Clave:</strong> Llegada de los portugueses (1500), período colonial (azúcar, oro), Imperio (1822-1889) con Pedro I y Pedro II, abolición de la esclavitud (1888), República Velha, Era Vargas, dictadura militar (1964-1985), redemocratización (1985).</li>
+                 </ul>
+                 <p><strong>Gobierno:</strong> Brasil es una república federativa presidencialista. El poder se divide en Ejecutivo (Presidente), Legislativo (Congreso Nacional bicameral: Senado y Cámara de Diputados) y Judicial (Supremo Tribunal Federal y otros tribunales).</p>
+                 <p>El país está dividido en 26 estados y un Distrito Federal.</p>
+             </div>
+        </div>
+
+        <div class="page right" id="page12">
+             <div class="page-content">
+                 <h2>Turismo y Consejos</h2>
+                 <img src="https://placehold.co/350x180/FFA500/8B4513?text=Turismo+Brasil" alt="Turismo en Brasil">
+                 <p>Brasil es un destino turístico popular por su belleza natural, cultura vibrante y hospitalidad.</p>
+                 <p><strong>Principales Destinos:</strong> Río de Janeiro (Cristo Redentor, Pan de Azúcar, playas), Foz do Iguaçu (Cataratas del Iguazú), Salvador (Pelourinho, cultura afrobrasileña), Amazonas (selva, cruceros fluviales), Pantanal (vida silvestre), playas del Nordeste (Porto de Galinhas, Jericoacoara), São Paulo (cultura, gastronomía).</p>
+                 <p><strong>Consejos para Viajeros:</strong></p>
+                 <ul>
+                     <li>La mejor época para visitar varía según la región (evitar temporada de lluvias en algunas zonas).</li>
+                     <li>Es recomendable vacunarse contra la fiebre amarilla para ciertas áreas (Amazonas, Pantanal).</li>
+                     <li>Aprender algunas frases básicas en portugués es útil.</li>
+                     <li>La seguridad puede ser una preocupación en grandes ciudades; tomar precauciones estándar.</li>
+                     <li>Probar la comida local es imprescindible.</li>
+                 </ul>
+             </div>
+        </div>
+
+         <div class="page left" id="page13">
+             <div class="page-content">
+                 <h2>Datos Curiosos</h2>
+                 <img src="https://placehold.co/350x180/FFC0CB/800080?text=Curiosidades+Brasil" alt="Curiosidades de Brasil">
+                 <ul>
+                     <li>Brasil es el mayor productor y exportador de café del mundo.</li>
+                     <li>El nombre "Brasil" proviene del árbol Pau-Brasil, cuya madera rojiza era valiosa para los tintes.</li>
+                     <li>Tiene la mayor comunidad japonesa fuera de Japón, principalmente en São Paulo.</li>
+                     <li>La selección brasileña de fútbol ha ganado la Copa Mundial de la FIFA 5 veces, más que cualquier otro país.</li>
+                     <li>El Carnaval de Río es considerado el más grande del mundo.</li>
+                     <li>No hay pena de muerte en Brasil.</li>
+                     <li>El río Amazonas es el más caudaloso y, según algunas mediciones, el más largo del mundo.</li>
+                 </ul>
+             </div>
+        </div>
+
+        <div class="page right" id="page14">
+             <div class="page-content">
+                 <h2>Fin del Atlas</h2>
+                 <img src="https://placehold.co/350x180/008080/FFFFFF?text=¡Obrigado!" alt="Gracias">
+                 <p>Esperamos que hayas disfrutado este recorrido interactivo por Brasil.</p>
+                 <p>Este atlas ofrece una visión general, ¡pero hay mucho más por descubrir en este vasto y fascinante país!</p>
+             </div>
+        </div>
+
+    </div> <div class="navigation">
+        <button id="prevBtn" class="nav-button" disabled>Regresar al Índice</button>
+        </div>
+</div> <script>
+    // --- Global Variables ---
+    const book = document.getElementById('book');
+    const prevBtn = document.getElementById('prevBtn'); // Button to return to index
+    const pages = Array.from(book.getElementsByClassName('page')); // Get all page elements
+    const indexButtons = Array.from(book.querySelectorAll('.index-item button')); // Get all index buttons
+
+    // Calculate the total number of "views" (pairs of pages). Index is view 0.
+    const numViews = Math.ceil(pages.length / 2); // e.g., 14 pages -> 7 views
+    let currentView = 0; // Initial view: index (view 0)
+
+    // --- Functions ---
+
+    /**
+     * Updates the navigation button state (enable/disable).
+     * The "Return to Index" button is disabled only when viewing the index (view 0).
+     */
+    function updateNavButton() {
+        prevBtn.disabled = currentView === 0;
+        // console.log(`Button updated: Prev disabled=${prevBtn.disabled}`); // Debug log
+    }
+
+    /**
+     * Navigates the book to the specified target view.
+     * @param {number|string} targetView - The index of the view to navigate to.
+     */
+    function goToView(targetView) {
+        targetView = parseInt(targetView); // Ensure targetView is a number
+
+        // Validate the target view
+        if (isNaN(targetView) || targetView === currentView || targetView < 0 || targetView >= numViews) {
+            // console.log("goToView: No change or invalid view:", targetView); // Reduced console noise
+            return; // Do nothing if the view is invalid or already current
+        }
+
+        // console.log(`goToView: Moving from view ${currentView} to ${targetView}`); // Reduced console noise
+        const direction = targetView > currentView ? 1 : -1; // Determine flip direction (1: forward, -1: backward)
+
+        // Sequentially flip/unflip pages to reach the target view
+        while (currentView !== targetView) {
+            // Determine the index of the view (page pair) to flip/unflip
+            const viewIndexToFlip = (direction === 1) ? currentView : currentView - 1;
+
+            // Calculate the indices of the left and right pages for the view being flipped/unflipped
+            const leftPageIndex = viewIndexToFlip * 2;
+            const rightPageIndex = viewIndexToFlip * 2 + 1;
+
+            if (direction === 1) { // Moving forward: Flip pages
+                // console.log(`Flipping view ${viewIndexToFlip}: Left page ${leftPageIndex}, Right page ${rightPageIndex}`); // Reduced console noise
+                // Flip left page (if it exists)
+                if (pages[leftPageIndex]) {
+                    pages[leftPageIndex].classList.add('flipped');
+                    pages[leftPageIndex].style.zIndex = 10 + viewIndexToFlip * 2;
+                }
+                // Flip right page (if it exists)
+                if (pages[rightPageIndex]) {
+                    pages[rightPageIndex].classList.add('flipped');
+                    pages[rightPageIndex].style.zIndex = 10 + viewIndexToFlip * 2 + 1;
+                }
+            } else { // Moving backward: Unflip pages
+                 // console.log(`Unflipping view ${viewIndexToFlip}: Left page ${leftPageIndex}, Right page ${rightPageIndex}`); // Reduced console noise
+                 // Unflip left page (if it exists)
+                 if (pages[leftPageIndex]) {
+                     pages[leftPageIndex].classList.remove('flipped');
+                     pages[leftPageIndex].style.zIndex = viewIndexToFlip;
+                 }
+                 // Unflip right page (if it exists)
+                 if (pages[rightPageIndex]) {
+                     pages[rightPageIndex].classList.remove('flipped');
+                     pages[rightPageIndex].style.zIndex = viewIndexToFlip;
+                 }
+            }
+            currentView += direction; // Move to the next/previous view index
+        }
+
+        // --- Final Z-Index Adjustment ---
+        // console.log("goToView: Setting final state for target view:", targetView); // Reduced console noise
+
+        // Reset z-index for all pages initially
+        pages.forEach((page, index) => {
+             page.style.zIndex = Math.floor(index / 2);
+        });
+
+        // Get indices for the final visible pages
+        const finalLeftPageIndex = targetView * 2;
+        const finalRightPageIndex = targetView * 2 + 1;
+
+        // Ensure the final left page is visible and on top
+        if (pages[finalLeftPageIndex]) {
+            pages[finalLeftPageIndex].classList.remove('flipped');
+            pages[finalLeftPageIndex].style.zIndex = 50 + targetView * 2; // High z-index
+        }
+        // Ensure the final right page is visible and on top
+        if (pages[finalRightPageIndex]) {
+             pages[finalRightPageIndex].classList.remove('flipped');
+             pages[finalRightPageIndex].style.zIndex = 50 + targetView * 2 + 1; // Highest z-index
+        }
+
+        updateNavButton(); // Update the navigation button state
+        // console.log("goToView: Finished. Current view:", currentView); // Reduced console noise
+    }
+
+    // --- Event Listeners ---
+
+    // Add click listeners to all index buttons
+    indexButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const target = button.dataset.targetView; // Get target view from data attribute
+            // console.log("Index button clicked, target view:", target); // Reduced console noise
+            goToView(target); // Navigate to the selected view
+        });
+    });
+
+    // Add click listener to the "Return to Index" button
+    prevBtn.addEventListener('click', () => {
+         // console.log("Return to Index button clicked - Going to view 0"); // Reduced console noise
+         goToView(0); // Navigate back to the first view (index)
+    });
+
+    // --- Initialization ---
+
+    /**
+     * Initializes the book state when the page loads.
+     */
+    function initializeBook() {
+        // console.log("Initializing book..."); // Reduced console noise
+        pages.forEach((page, index) => {
+            const viewIndex = Math.floor(index / 2);
+            if (viewIndex > 0) {
+                page.classList.add('flipped');
+                page.style.zIndex = 10 + viewIndex;
+            } else {
+                page.classList.remove('flipped');
+                page.style.zIndex = 50 + index;
+            }
+        });
+        currentView = 0;
+        updateNavButton();
+        // console.log("Initialization complete. Current view:", currentView); // Reduced console noise
+    }
+
+    // Initialize the book once the DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', initializeBook);
+
+</script>
+
+</body>
+</html>
